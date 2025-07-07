@@ -2,7 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Visualização de Cruzamentos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cruzamentos - Visualização</title>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -10,46 +11,142 @@
   <script src="https://unpkg.com/wellknown@0.5.0/wellknown.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
   <style>
-    body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; }
-    .tabela-container { width: 60%; padding: 20px; overflow-y: auto; }
-    .painel { width: 40%; background: #f9f9f9; padding: 20px; border-left: 1px solid #ccc; display: flex; flex-direction: column; }
-    table { width: 100%; border-collapse: collapse; background: white; }
-    th, td { padding: 10px; border: 1px solid #ddd; }
-    .validado { background-color: #d4edda !important; color: #155724; font-weight: bold; }
-    .filtros { margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
-    .filtros select {
-      padding: 8px; font-size: 14px; border-radius: 5px; border: 1px solid #ccc;
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw; /* Ensures the body takes full viewport width */
+      overflow: hidden; /* Keeps overflow hidden for the main body */
+      font-family: sans-serif;
     }
-    #map { height: 250px; margin-top: 10px; border: 1px solid #ccc; }
-    tr.selecionado { outline: 2px solid #1565c0; background-color: #e3f2fd !important; 
 
-    /* --- Aplicação do Zoom Out com transform: scale() --- */
-    transform: scale(0.8); /* Diminui o zoom para 80% */
-    transform-origin: top left; /* Escala a partir do canto superior esquerdo */
-    width: 125%; /* Compensa o escalonamento (1 / 0.8 = 1.25) */
-    height: 125%; /* Compensa o escalonamento */
-    overflow: auto; /* Reabilita barras de rolagem se o conteúdo exceder */
-    /* --- Fim da Aplicação do Zoom Out --- */
-}
+    /* Class for scaling the table content */
+    .tabela-conteudo-escalado {
+      transform: scale(0.9); /* Apply 0.9 scale to table content */
+      transform-origin: top left; /* Scale from top-left corner */
+      width: 111.11%; /* Compensate for scaling (100 / 0.9 = 111.11%) */
+      height: 111.11%; /* Compensate for scaling (100 / 0.9 = 111.11%) */
+      box-sizing: border-box; /* Include padding and border in the element's total width and height */
+      padding-right: 20px; /* Add some right padding to prevent content from touching the edge after scaling */
+    }
 
+    .tabela-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 60%; /* Occupies 60% of the page width */
+      height: 100%;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .painel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 50%; /* Adjusted to compensate for scaling (40% / 0.8 = 50%) */
+      height: 125%; /* Adjusted to compensate for scaling (100% / 0.8 = 125%) */
+      background: #f9f9f9;
+      padding: 20px;
+      border-left: 1px solid #ccc;
+      overflow-y: auto;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      transform: scale(0.8); /* Apply 0.8 scale to the panel */
+      transform-origin: top right; /* Scale from top-right corner */
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+    }
+
+    .validado {
+      background-color: #d4edda !important;
+      color: #155724;
+      font-weight: bold;
+    }
+
+    .filtros {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .filtros input,
+    .filtros select,
+    .filtros button {
+      padding: 8px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .filtros button {
+      background-color: #1565c0;
+      color: white;
+      cursor: pointer;
+    }
+
+    #map {
+      height: 250px; /* Set a fixed height */
+      width: 250px; /* Set a fixed width equal to height for a square shape */
+      margin-top: 10px;
+      border: 1px solid #ccc;
+      transform: scale(1); /* Apply 0.7 scale to the map */
+      transform-origin: top left; /* Scale from top-left corner of the map */
+      /* Removed width and height compensation as fixed pixel values are used */
+    }
+
+    tr.selecionado {
+      outline: 2px solid #1565c0;
+      background-color: #e3f2fd !important;
+    }
   </style>
 </head>
 <body>
   <div class="tabela-container">
-    <h1>Cruzamentos - Visualização</h1>
-    <div class="filtros">
-      <select id="filtro-bairro"><option value="">Todos os bairros</option></select>
-      <select id="filtro-status">
-        <option value="">Todos os status</option>
-        <option value="validado">Validados</option>
-        <option value="nao-validado">Não Validados</option>
-      </select>
+    <div class="tabela-conteudo-escalado"> <!-- Div for scaling table content -->
+      <h1>Cruzamentos - Visualização</h1>
+
+      <button onclick="toggleGuia()" style="margin-bottom:10px;padding:8px 12px;background:#1565c0;color:white;border:none;border-radius:4px;cursor:pointer;">
+        ❓ Guia de Utilização
+      </button>
+      <div id="guia-uso" style="display:none; background:#f1f1f1; padding:15px; border:1px solid #ccc; border-radius:6px; margin-bottom:20px;">
+        <h3>📘 Guia de Utilização</h3>
+        <ul>
+          <li><strong>Filtrar cruzamentos:</strong> Use os campos de filtro para refinar por bairro e status.</li>
+          <li><strong>Clicar em uma linha:</strong> Veja os detalhes e localização do cruzamento no painel lateral direito e no mapa.</li>
+          <li><strong>Status:</strong> Os cruzamentos validados aparecem em verde.</li>
+          <li><strong>Mapa:</strong> Mostra o cruzamento com zoom e marcador. Baseado no OpenStreetMap.</li>
+        </ul>
+        <p style="font-size:0.9em;color:#444;">Os dados são carregados em tempo real do Firebase. Recarregue a página para ver novas alterações.</p>
+      </div>
+
+      <div class="filtros">
+        <select id="filtro-bairro"><option value="">Todos os bairros</option></select>
+        <select id="filtro-status">
+          <option value="">Todos os status</option>
+          <option value="validado">Validados</option>
+          <option value="nao-validado">Não Validados</option>
+        </select>
+      </div>
+
+      <table id="tabela">
+        <thead><tr><th>ID</th><th>Bairro</th><th>Rua 1</th><th>Rua 2</th><th>Status</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </div>
-    <table id="tabela">
-      <thead><tr><th>ID</th><th>Bairro</th><th>Rua 1</th><th>Rua 2</th><th>Status</th></tr></thead>
-      <tbody></tbody>
-    </table>
   </div>
+
   <div class="painel">
     <h2>Detalhes</h2>
     <p><strong>ID:</strong> <span id="det-id">---</span></p>
@@ -62,8 +159,9 @@
   </div>
 
   <script>
+    // Firebase configuration (replace with your actual config if different)
     const firebaseConfig = {
-      apiKey: "AIzaSyDxxxxxxx",
+      apiKey: "AIzaSyDxxxxxxx", // Placeholder for API Key
       authDomain: "ruas-gurinhem.firebaseapp.com",
       projectId: "ruas-gurinhem"
     };
@@ -72,25 +170,37 @@
 
     let dados = [];
     let marker;
+    // Initialize map with a default view
     let map = L.map('map').setView([-7, -35], 15);
+    // Add OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
+    // Reference to the Firestore collection
     let colecaoRef = db.collection("ExcelUploads").doc("CRUZAMENTOS_com_status").collection("features");
 
+    /**
+     * Loads data from Firestore and populates the filters and table.
+     */
     function carregarDados() {
       colecaoRef.get().then(snapshot => {
+        // Map document data, including the document ID
         dados = snapshot.docs.map(doc => ({ ...doc.data(), _docId: doc.id }));
         preencherFiltroBairros();
         preencherTabela(dados);
+      }).catch(error => {
+        console.error("Error loading data from Firestore:", error);
       });
     }
 
+    /**
+     * Populates the neighborhood filter dropdown with unique neighborhood names from the data.
+     */
     function preencherFiltroBairros() {
-      const bairros = [...new Set(dados.map(d => d.NOME))];
+      const bairros = [...new Set(dados.map(d => d.NOME))]; // Get unique neighborhood names
       const sel = document.getElementById("filtro-bairro");
-      sel.innerHTML = '<option value="">Todos os bairros</option>';
+      sel.innerHTML = '<option value="">Todos os bairros</option>'; // Default option
       bairros.sort().forEach(nome => {
         const opt = document.createElement("option");
         opt.value = nome;
@@ -99,34 +209,57 @@
       });
     }
 
+    /**
+     * Populates the table with the provided filtered data.
+     * @param {Array} filtrados - The array of data objects to display.
+     */
     function preencherTabela(filtrados) {
       const tbody = document.querySelector("#tabela tbody");
-      tbody.innerHTML = "";
+      tbody.innerHTML = ""; // Clear existing rows
       filtrados.forEach(d => {
-        const validado = d.status === true || d.status === "TRUE";
+        const validado = d.status === true || d.status === "TRUE"; // Check validation status
         const tr = document.createElement("tr");
-        if (validado) tr.classList.add("validado");
+        if (validado) tr.classList.add("validado"); // Add class for validated rows
         tr.innerHTML = `
-          <td>${d.fid}</td>
-          <td>${d.NOME}</td>
-          <td>${d.rua1}</td>
-          <td>${d.rua2}</td>
+          <td>${d.fid || 'N/A'}</td>
+          <td>${d.NOME || 'N/A'}</td>
+          <td>${d.rua1 || 'N/A'}</td>
+          <td>${d.rua2 || 'N/A'}</td>
           <td><strong>${validado ? "Validado" : "Não Validado"}</strong></td>
         `;
+        // Add click event listener to show details
         tr.addEventListener("click", () => mostrarDetalhes(d, tr));
         tbody.appendChild(tr);
       });
     }
 
+    /**
+     * Converts UTM coordinates to Latitude and Longitude.
+     * Assumes EPSG:31985 (UTM Zone 25S, GRS80 ellipsoid) for input.
+     * @param {number} x - The UTM Easting coordinate.
+     * @param {number} y - The UTM Northing coordinate.
+     * @returns {Array<number>} - An array containing [longitude, latitude].
+     */
     function utmToLatLng(x, y) {
-      proj4.defs("EPSG:31985", "+proj=utm +zone=25 +south +ellps=GRS80 +units=m +no_defs");
+      // Define the projection for EPSG:31985 if not already defined
+      if (!proj4.defs("EPSG:31985")) {
+        proj4.defs("EPSG:31985", "+proj=utm +zone=25 +south +ellps=GRS80 +units=m +no_defs");
+      }
+      // Convert from EPSG:31985 to EPSG:4326 (WGS84 Latitude/Longitude)
       return proj4("EPSG:31985", "EPSG:4326", [x, y]);
     }
 
+    /**
+     * Displays the details of a selected intersection and updates the map.
+     * @param {Object} d - The data object of the selected intersection.
+     * @param {HTMLElement} trClicada - The table row element that was clicked.
+     */
     function mostrarDetalhes(d, trClicada) {
+      // Remove 'selecionado' class from all rows and add to the clicked row
       document.querySelectorAll("#tabela tbody tr").forEach(tr => tr.classList.remove("selecionado"));
       trClicada.classList.add("selecionado");
 
+      // Update details panel
       document.getElementById("det-id").textContent = d.fid || "---";
       document.getElementById("det-bairro").textContent = d.NOME || "---";
       document.getElementById("det-rua1").textContent = d.rua1 || "---";
@@ -134,22 +267,32 @@
       document.getElementById("det-status").textContent = (d.status === true || d.status === "TRUE") ? "Validado" : "Não Validado";
       document.getElementById("det-coord").textContent = d.geometry || "---";
 
+      // Update map if geometry data is available
       if (d.geometry) {
         try {
+          // Parse WKT (Well-Known Text) geometry
           const geojson = window.wellknown.parse(d.geometry);
-          if (!geojson || geojson.type !== "Point") throw new Error("Formato inválido");
-          const [x, y] = geojson.coordinates;
-          const [lon, lat] = utmToLatLng(x, y);
+          if (!geojson || geojson.type !== "Point") {
+            throw new Error("Formato de geometria inválido ou não é um Ponto.");
+          }
+          const [x, y] = geojson.coordinates; // Get UTM coordinates
+          const [lon, lat] = utmToLatLng(x, y); // Convert to LatLng
           const latlng = [lat, lon];
+
+          // Remove existing marker and add a new one
           if (marker) marker.remove();
           marker = L.marker(latlng).addTo(map);
-          map.setView(latlng, 18);
+          map.setView(latlng, 18); // Set map view to the new coordinates with zoom
         } catch (err) {
-          console.error("Erro ao interpretar WKT:", err);
+          console.error("Erro ao interpretar WKT ou converter coordenadas:", err);
+          // Optionally, display a user-friendly message about the error
         }
       }
     }
 
+    /**
+     * Applies filters based on selected neighborhood and status, then updates the table.
+     */
     function aplicarFiltros() {
       const bairro = document.getElementById("filtro-bairro").value;
       const status = document.getElementById("filtro-status").value;
@@ -163,9 +306,19 @@
       preencherTabela(filtrados);
     }
 
+    /**
+     * Toggles the visibility of the usage guide.
+     */
+    function toggleGuia() {
+      const guia = document.getElementById("guia-uso");
+      guia.style.display = guia.style.display === "none" ? "block" : "none";
+    }
+
+    // Add event listeners for filter changes
     document.getElementById("filtro-bairro").addEventListener("change", aplicarFiltros);
     document.getElementById("filtro-status").addEventListener("change", aplicarFiltros);
 
+    // Initial data load when the page loads
     carregarDados();
   </script>
 </body>
