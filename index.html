@@ -21,7 +21,17 @@
       padding: 8px; font-size: 14px; border-radius: 5px; border: 1px solid #ccc;
     }
     #map { height: 250px; margin-top: 10px; border: 1px solid #ccc; }
-    tr.selecionado { outline: 2px solid #1565c0; background-color: #e3f2fd !important; }
+    tr.selecionado { outline: 2px solid #1565c0; background-color: #e3f2fd !important; 
+
+    /* --- Aplicação do Zoom Out com transform: scale() --- */
+    transform: scale(0.8); /* Diminui o zoom para 80% */
+    transform-origin: top left; /* Escala a partir do canto superior esquerdo */
+    width: 125%; /* Compensa o escalonamento (1 / 0.8 = 1.25) */
+    height: 125%; /* Compensa o escalonamento */
+    overflow: auto; /* Reabilita barras de rolagem se o conteúdo exceder */
+    /* --- Fim da Aplicação do Zoom Out --- */
+}
+
   </style>
 </head>
 <body>
