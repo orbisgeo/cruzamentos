@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Visualização de Cruzamentos</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/wellknown@0.5.0/wellknown.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; }
+    .tabela-container { width: 60%; padding: 20px; overflow-y: auto; }
+    .painel { width: 40%; background: #f9f9f9; padding: 20px; border-left: 1px solid #ccc; display: flex; flex-direction: column; }
+    table { width: 100%; border-collapse: collapse; background: white; }
+    th, td { padding: 10px; border: 1px solid #ddd; }
+    .validado { background-color: #d4edda !important; color: #155724; font-weight: bold; }
+    .filtros { margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .filtros select {
+      padding: 8px; font-size: 14px; border-radius: 5px; border: 1px solid #ccc;
+    }
+    #map { height: 250px; margin-top: 10px; border: 1px solid #ccc; }
+    tr.selecionado { outline: 2px solid #1565c0; background-color: #e3f2fd !important; }
+  </style>
+</head>
+<body>
+  <div class="tabela-container">
+    <h1>Cruzamentos - Visualização</h1>
+    <div class="filtros">
+      <select id="filtro-bairro"><option value="">Todos os bairros</option></select>
+      <select id="filtro-status">
+        <option value="">Todos os status</option>
+        <option value="validado">Validados</option>
+        <option value="nao-validado">Não Validados</option>
+      </select>
+    </div>
+    <table id="tabela">
+      <thead><tr><th>ID</th><th>Bairro</th><th>Rua 1</th><th>Rua 2</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="painel">
+    <h2>Detalhes</h2>
+    <p><strong>ID:</strong> <span id="det-id">---</span></p>
+    <p><strong>Bairro:</strong> <span id="det-bairro">---</span></p>
+    <p><strong>Rua 1:</strong> <span id="det-rua1">---</span></p>
+    <p><strong>Rua 2:</strong> <span id="det-rua2">---</span></p>
+    <p><strong>Status:</strong> <span id="det-status">---</span></p>
+    <p><strong>Coordenadas:</strong> <span id="det-coord">---</span></p>
+    <div id="map"></div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDxxxxxxx",
+      authDomain: "ruas-gurinhem.firebaseapp.com",
+      projectId: "ruas-gurinhem"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let dados = [];
+    let marker;
+    let map = L.map('map').setView([-7, -35], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let colecaoRef = db.collection("ExcelUploads").doc("CRUZAMENTOS_com_status").collection("features");
+
+    function carregarDados() {
+      colecaoRef.get().then(snapshot => {
+        dados = snapshot.docs.map(doc => ({ ...doc.data(), _docId: doc.id }));
+        preencherFiltroBairros();
+        preencherTabela(dados);
+      });
+    }
+
+    function preencherFiltroBairros() {
+      const bairros = [...new Set(dados.map(d => d.NOME))];
+      const sel = document.getElementById("filtro-bairro");
+      sel.innerHTML = '<option value="">Todos os bairros</option>';
+      bairros.sort().forEach(nome => {
+        const opt = document.createElement("option");
+        opt.value = nome;
+        opt.textContent = nome;
+        sel.appendChild(opt);
+      });
+    }
+
+    function preencherTabela(filtrados) {
+      const tbody = document.querySelector("#tabela tbody");
+      tbody.innerHTML = "";
+      filtrados.forEach(d => {
+        const validado = d.status === true || d.status === "TRUE";
+        const tr = document.createElement("tr");
+        if (validado) tr.classList.add("validado");
+        tr.innerHTML = `
+          <td>${d.fid}</td>
+          <td>${d.NOME}</td>
+          <td>${d.rua1}</td>
+          <td>${d.rua2}</td>
+          <td><strong>${validado ? "Validado" : "Não Validado"}</strong></td>
+        `;
+        tr.addEventListener("click", () => mostrarDetalhes(d, tr));
+        tbody.appendChild(tr);
+      });
+    }
+
+    function utmToLatLng(x, y) {
+      proj4.defs("EPSG:31985", "+proj=utm +zone=25 +south +ellps=GRS80 +units=m +no_defs");
+      return proj4("EPSG:31985", "EPSG:4326", [x, y]);
+    }
+
+    function mostrarDetalhes(d, trClicada) {
+      document.querySelectorAll("#tabela tbody tr").forEach(tr => tr.classList.remove("selecionado"));
+      trClicada.classList.add("selecionado");
+
+      document.getElementById("det-id").textContent = d.fid || "---";
+      document.getElementById("det-bairro").textContent = d.NOME || "---";
+      document.getElementById("det-rua1").textContent = d.rua1 || "---";
+      document.getElementById("det-rua2").textContent = d.rua2 || "---";
+      document.getElementById("det-status").textContent = (d.status === true || d.status === "TRUE") ? "Validado" : "Não Validado";
+      document.getElementById("det-coord").textContent = d.geometry || "---";
+
+      if (d.geometry) {
+        try {
+          const geojson = window.wellknown.parse(d.geometry);
+          if (!geojson || geojson.type !== "Point") throw new Error("Formato inválido");
+          const [x, y] = geojson.coordinates;
+          const [lon, lat] = utmToLatLng(x, y);
+          const latlng = [lat, lon];
+          if (marker) marker.remove();
+          marker = L.marker(latlng).addTo(map);
+          map.setView(latlng, 18);
+        } catch (err) {
+          console.error("Erro ao interpretar WKT:", err);
+        }
+      }
+    }
+
+    function aplicarFiltros() {
+      const bairro = document.getElementById("filtro-bairro").value;
+      const status = document.getElementById("filtro-status").value;
+
+      const filtrados = dados.filter(d => {
+        const validado = d.status === true || d.status === "TRUE";
+        const condBairro = bairro ? d.NOME === bairro : true;
+        const condStatus = status === "validado" ? validado : status === "nao-validado" ? !validado : true;
+        return condBairro && condStatus;
+      });
+      preencherTabela(filtrados);
+    }
+
+    document.getElementById("filtro-bairro").addEventListener("change", aplicarFiltros);
+    document.getElementById("filtro-status").addEventListener("change", aplicarFiltros);
+
+    carregarDados();
+  </script>
+</body>
+</html>
