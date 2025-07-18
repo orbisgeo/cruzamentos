@@ -1,325 +1,691 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cruzamentos - Visualização</title>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/wellknown@0.5.0/wellknown.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100vh;
-      width: 100vw; /* Ensures the body takes full viewport width */
-      overflow: hidden; /* Keeps overflow hidden for the main body */
-      font-family: sans-serif;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Cruzamentos Otimizado</title>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- WKT & Proj4 -->
+    <script src="https://unpkg.com/wellknown@0.5.0/wellknown.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+    
+    <!-- Google Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 
-    /* Class for scaling the table content */
-    .tabela-conteudo-escalado {
-      transform: scale(0.9); /* Apply 0.9 scale to table content */
-      transform-origin: top left; /* Scale from top-left corner */
-      width: 111.11%; /* Compensate for scaling (100 / 0.9 = 111.11%) */
-      height: 111.11%; /* Compensate for scaling (100 / 0.9 = 111.11%) */
-      box-sizing: border-box; /* Include padding and border in the element's total width and height */
-      padding-right: 20px; /* Add some right padding to prevent content from touching the edge after scaling */
-    }
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --background-color: #f1f5f9;
+            --panel-background: #ffffff;
+            --border-color: #e2e8f0;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --font-family: 'Inter', sans-serif;
 
-    .tabela-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 60%; /* Occupies 60% of the page width */
-      height: 100%;
-      overflow-y: auto;
-      padding: 20px;
-    }
+            /* Status Colors */
+            --status-validado-bg: #dcfce7;
+            --status-validado-text: #166534;
+            --status-fabricado-bg: #e0e7ff;
+            --status-fabricado-text: #4338ca;
+            --status-nao-validado-bg: #fee2e2;
+            --status-nao-validado-text: #b91c1c;
+            --status-default-bg: #f1f5f9;
+            --status-default-text: #475569;
+        }
 
-    .painel {
-      position: fixed;
-      right: 0;
-      top: 0;
-      width: 50%; /* Adjusted to compensate for scaling (40% / 0.8 = 50%) */
-      height: 125%; /* Adjusted to compensate for scaling (100% / 0.8 = 125%) */
-      background: #f9f9f9;
-      padding: 20px;
-      border-left: 1px solid #ccc;
-      overflow-y: auto;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      transform: scale(0.8); /* Apply 0.8 scale to the panel */
-      transform-origin: top right; /* Scale from top-right corner */
-    }
+        /* Basic Reset & Font */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            font-family: var(--font-family);
+            background-color: var(--background-color);
+            color: var(--text-primary);
+        }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: white;
-    }
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            height: 100vh;
+        }
 
-    th, td {
-      padding: 10px;
-      border: 1px solid #ddd;
-    }
+        .table-section {
+            width: 65%;
+            padding: 24px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
 
-    .validado {
-      background-color: #d4edda !important;
-      color: #155724;
-      font-weight: bold;
-    }
+        .details-panel {
+            width: 35%;
+            background: var(--panel-background);
+            border-left: 1px solid var(--border-color);
+            padding: 24px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+            }
+            .table-section, .details-panel {
+                width: 100%;
+                height: 50vh;
+            }
+            .details-panel {
+                 border-left: none;
+                 border-top: 1px solid var(--border-color);
+            }
+        }
 
-    .filtros {
-      margin-bottom: 10px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
 
-    .filtros input,
-    .filtros select,
-    .filtros button {
-      padding: 8px;
-      font-size: 14px;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-    }
+        /* Header */
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 0 16px 0;
+        }
 
-    .filtros button {
-      background-color: #1565c0;
-      color: white;
-      cursor: pointer;
-    }
+        /* Filters */
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
 
-    #map {
-      height: 250px; /* Set a fixed height */
-      width: 250px; /* Set a fixed width equal to height for a square shape */
-      margin-top: 10px;
-      border: 1px solid #ccc;
-      transform: scale(1); /* Apply 0.7 scale to the map */
-      transform-origin: top left; /* Scale from top-left corner of the map */
-      /* Removed width and height compensation as fixed pixel values are used */
-    }
+        .filters select, .filters button {
+            padding: 10px 14px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--panel-background);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        
+        .filters select:focus, .filters button:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
 
-    tr.selecionado {
-      outline: 2px solid #1565c0;
-      background-color: #e3f2fd !important;
-    }
-  </style>
+        .filters button {
+            background-color: var(--primary-color);
+            color: #fff;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filters button:hover {
+            background-color: var(--primary-hover);
+        }
+        
+        .filters button.secondary {
+            background-color: #f8fafc;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .filters button.secondary:hover {
+             background-color: #f1f5f9;
+        }
+
+        /* Item Counter */
+        #contador-itens {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        /* Table */
+        .table-wrapper {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--panel-background);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        th:first-child, td:first-child {
+            width: 40px;
+            text-align: center;
+        }
+
+        tbody tr {
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+
+        tbody tr:hover {
+            background-color: #f1f5f9;
+        }
+        
+        tbody tr.selecionado {
+            background-color: #eff6ff !important;
+            box-shadow: inset 3px 0 0 0 var(--primary-color);
+        }
+        
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        
+        .status-badge.validado { background-color: var(--status-validado-bg); color: var(--status-validado-text); }
+        .status-badge.fabricado { background-color: var(--status-fabricado-bg); color: var(--status-fabricado-text); }
+        .status-badge.nao-validado { background-color: var(--status-nao-validado-bg); color: var(--status-nao-validado-text); }
+        .status-badge.default { background-color: var(--status-default-bg); color: var(--status-default-text); }
+        
+        .status-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .status-badge.validado .dot { background-color: var(--status-validado-text); }
+        .status-badge.fabricado .dot { background-color: var(--status-fabricado-text); }
+        .status-badge.nao-validado .dot { background-color: var(--status-nao-validado-text); }
+        .status-badge.default .dot { background-color: var(--status-default-text); }
+
+        /* Details Panel */
+        .details-panel h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 20px 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+        
+        .details-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        
+        .details-placeholder .material-symbols-outlined {
+            font-size: 64px;
+            margin-bottom: 16px;
+            color: #cbd5e1;
+        }
+
+        .details-content {
+            display: none; /* Hidden by default */
+        }
+
+        .details-content p {
+            margin: 0 0 14px 0;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .details-content p strong {
+            display: block;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        #map {
+            height: 250px;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-top: 16px;
+            background-color: #e2e8f0;
+        }
+        
+        /* Checkbox style */
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary-color);
+            cursor: pointer;
+        }
+
+    </style>
 </head>
 <body>
-  <div class="tabela-container">
-    <div class="tabela-conteudo-escalado"> <!-- Div for scaling table content -->
-      <h1>Cruzamentos - Visualização</h1>
 
-      <button onclick="toggleGuia()" style="margin-bottom:10px;padding:8px 12px;background:#1565c0;color:white;border:none;border-radius:4px;cursor:pointer;">
-        ❓ Guia de Utilização
-      </button>
-      <div id="guia-uso" style="display:none; background:#f1f1f1; padding:15px; border:1px solid #ccc; border-radius:6px; margin-bottom:20px;">
-        <h3>📘 Guia de Utilização</h3>
-        <ul>
-          <li><strong>Filtrar cruzamentos:</strong> Use os campos de filtro para refinar por bairro e status.</li>
-          <li><strong>Clicar em uma linha:</strong> Veja os detalhes e localização do cruzamento no painel lateral direito e no mapa.</li>
-          <li><strong>Status:</strong> Os cruzamentos validados aparecem em verde.</li>
-          <li><strong>Mapa:</strong> Mostra o cruzamento com zoom e marcador. Baseado no OpenStreetMap.</li>
-        </ul>
-        <p style="font-size:0.9em;color:#444;">Os dados são carregados em tempo real do Firebase. Recarregue a página para ver novas alterações.</p>
-      </div>
+    <div class="main-container">
+        <div class="table-section">
+            <h1>Visualizador de Cruzamentos</h1>
+            <div class="filters">
+                <select id="filtro-bairro"><option value="">Todos os bairros</option></select>
+                <select id="filtro-status">
+                    <option value="">Todos os status</option>
+                    <option value="validado">Validados</option>
+                    <option value="fabricado">Fabricados</option>
+                    <option value="nao-validado">Não Validados</option>
+                </select>
+                <button onclick="alterarSelecionadosPara('fabricado')"><span class="material-symbols-outlined">build</span>Marcar como Fabricado</button>
+                <button onclick="reverterStatusSelecionados()" class="secondary"><span class="material-symbols-outlined">undo</span>Desfazer</button>
+            </div>
+            <p id="contador-itens">Carregando dados...</p>
+            <div class="table-wrapper">
+                <table id="tabela">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selecionar-todos" onchange="toggleSelecionarTodos(this)"></th>
+                            <th>ID</th>
+                            <th>Bairro</th>
+                            <th>Rua 1</th>
+                            <th>Rua 2</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Rows will be injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-      <div class="filtros">
-        <select id="filtro-bairro"><option value="">Todos os bairros</option></select>
-        <select id="filtro-status">
-          <option value="">Todos os status</option>
-          <option value="validado">Validados</option>
-          <option value="nao-validado">Não Validados</option>
-        </select>
-      </div>
-
-      <table id="tabela">
-        <thead><tr><th>ID</th><th>Bairro</th><th>Rua 1</th><th>Rua 2</th><th>Status</th></tr></thead>
-        <tbody></tbody>
-      </table>
+        <div class="details-panel">
+            <div id="details-placeholder" class="details-placeholder">
+                <span class="material-symbols-outlined">info</span>
+                <p>Selecione um item na tabela<br>para ver os detalhes.</p>
+            </div>
+            <div id="details-content" class="details-content">
+                <h2>Detalhes do Cruzamento</h2>
+                <p><strong>ID do Ponto</strong><span id="det-id">---</span></p>
+                <p><strong>Bairro</strong><span id="det-bairro">---</span></p>
+                <p><strong>Rua 1</strong><span id="det-rua1">---</span></p>
+                <p><strong>Rua 2</strong><span id="det-rua2">---</span></p>
+                <p><strong>Status Atual</strong><span id="det-status-container">---</span></p>
+                <p><strong>Coordenadas (WKT)</strong><span id="det-coord" style="word-break: break-all;">---</span></p>
+                <div id="map"></div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <div class="painel">
-    <h2>Detalhes</h2>
-    <p><strong>ID:</strong> <span id="det-id">---</span></p>
-    <p><strong>Bairro:</strong> <span id="det-bairro">---</span></p>
-    <p><strong>Rua 1:</strong> <span id="det-rua1">---</span></p>
-    <p><strong>Rua 2:</strong> <span id="det-rua2">---</span></p>
-    <p><strong>Status:</strong> <span id="det-status">---</span></p>
-    <p><strong>Coordenadas:</strong> <span id="det-coord">---</span></p>
-    <div id="map"></div>
-  </div>
-
-  <script>
-    // Firebase configuration (replace with your actual config if different)
+<script>
+    // --- CONFIGURAÇÃO ---
     const firebaseConfig = {
-      apiKey: "AIzaSyDxxxxxxx", // Placeholder for API Key
-      authDomain: "ruas-gurinhem.firebaseapp.com",
-      projectId: "ruas-gurinhem"
+        // Your Firebase config object here
+        // IMPORTANT: For security, use Firebase Authentication and Rules.
+        // For this example, I'm keeping your original structure but this is not recommended for production.
+        apiKey: "AIzaSyDxxxxxxx", // Replace with your actual API key
+        authDomain: "ruas-gurinhem.firebaseapp.com",
+        projectId: "ruas-gurinhem"
     };
+
+    // --- INICIALIZAÇÃO ---
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const colecaoRef = db.collection("ExcelUploads").doc("CRUZAMENTOS_com_status").collection("features");
+    
+    // --- ESTADO DA APLICAÇÃO ---
+    let todosOsDados = [];
+    let dadosFiltrados = [];
+    let selecionados = new Set();
+    let linhaSelecionada = null;
+    let mapa, marcador;
 
-    let dados = [];
-    let marker;
-    // Initialize map with a default view
-    let map = L.map('map').setView([-7, -35], 15);
-    // Add OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    // --- ELEMENTOS DO DOM ---
+    const tabelaBody = document.querySelector("#tabela tbody");
+    const contadorItens = document.getElementById("contador-itens");
+    const filtroBairro = document.getElementById("filtro-bairro");
+    const filtroStatus = document.getElementById("filtro-status");
+    const detailsPlaceholder = document.getElementById('details-placeholder');
+    const detailsContent = document.getElementById('details-content');
 
-    // Reference to the Firestore collection
-    let colecaoRef = db.collection("ExcelUploads").doc("CRUZAMENTOS_com_status").collection("features");
+    // --- FUNÇÕES DE LÓGICA ---
 
     /**
-     * Loads data from Firestore and populates the filters and table.
+     * Define o status de um cruzamento com base em suas propriedades.
+     * A lógica foi refinada para ser mais clara.
+     * @param {object} item - O objeto de dados do cruzamento.
+     * @returns {string} - O status ('validado', 'fabricado', 'nao-validado').
      */
-    function carregarDados() {
-      colecaoRef.get().then(snapshot => {
-        // Map document data, including the document ID
-        dados = snapshot.docs.map(doc => ({ ...doc.data(), _docId: doc.id }));
-        preencherFiltroBairros();
-        preencherTabela(dados);
-      }).catch(error => {
-        console.error("Error loading data from Firestore:", error);
-      });
+    function getStatus(item) {
+        if (item.status === "fabricado") {
+            return "fabricado";
+        }
+        const rua1 = item.rua1 ? String(item.rua1).toLowerCase().trim() : "";
+        const rua2 = item.rua2 ? String(item.rua2).toLowerCase().trim() : "";
+        const hasStatusTrue = item.status === true || String(item.status).toUpperCase() === "TRUE";
+        const hasValidStreets = rua1 && rua2 && !rua1.includes("sem") && !rua2.includes("sem");
+
+        if (hasStatusTrue && hasValidStreets) {
+            return "validado";
+        }
+        return "nao-validado";
     }
 
     /**
-     * Populates the neighborhood filter dropdown with unique neighborhood names from the data.
+     * Carrega os dados iniciais do Firestore.
+     */
+    async function carregarDados() {
+        try {
+            const snapshot = await colecaoRef.get();
+            todosOsDados = snapshot.docs.map(doc => ({
+                _docId: doc.id,
+                ...doc.data()
+            }));
+            preencherFiltroBairros();
+            aplicarFiltros();
+        } catch (error) {
+            console.error("Erro ao carregar dados do Firestore:", error);
+            contadorItens.textContent = "Falha ao carregar dados.";
+        }
+    }
+
+    /**
+     * Popula o seletor de bairros com base nos dados carregados.
      */
     function preencherFiltroBairros() {
-      const bairros = [...new Set(dados.map(d => d.NOME))]; // Get unique neighborhood names
-      const sel = document.getElementById("filtro-bairro");
-      sel.innerHTML = '<option value="">Todos os bairros</option>'; // Default option
-      bairros.sort().forEach(nome => {
-        const opt = document.createElement("option");
-        opt.value = nome;
-        opt.textContent = nome;
-        sel.appendChild(opt);
-      });
+        const bairros = [...new Set(todosOsDados.map(d => d.NOME).filter(Boolean))];
+        filtroBairro.innerHTML = '<option value="">Todos os bairros</option>';
+        bairros.sort().forEach(nome => {
+            const opt = document.createElement("option");
+            opt.value = nome;
+            opt.textContent = nome;
+            filtroBairro.appendChild(opt);
+        });
     }
-
+    
     /**
-     * Populates the table with the provided filtered data.
-     * @param {Array} filtrados - The array of data objects to display.
-     */
-    function preencherTabela(filtrados) {
-      const tbody = document.querySelector("#tabela tbody");
-      tbody.innerHTML = ""; // Clear existing rows
-      filtrados.forEach(d => {
-        const validado = d.status === true || d.status === "TRUE"; // Check validation status
-        const tr = document.createElement("tr");
-        if (validado) tr.classList.add("validado"); // Add class for validated rows
-        tr.innerHTML = `
-          <td>${d.fid || 'N/A'}</td>
-          <td>${d.NOME || 'N/A'}</td>
-          <td>${d.rua1 || 'N/A'}</td>
-          <td>${d.rua2 || 'N/A'}</td>
-          <td><strong>${validado ? "Validado" : "Não Validado"}</strong></td>
-        `;
-        // Add click event listener to show details
-        tr.addEventListener("click", () => mostrarDetalhes(d, tr));
-        tbody.appendChild(tr);
-      });
-    }
-
-    /**
-     * Converts UTM coordinates to Latitude and Longitude.
-     * Assumes EPSG:31985 (UTM Zone 25S, GRS80 ellipsoid) for input.
-     * @param {number} x - The UTM Easting coordinate.
-     * @param {number} y - The UTM Northing coordinate.
-     * @returns {Array<number>} - An array containing [longitude, latitude].
-     */
-    function utmToLatLng(x, y) {
-      // Define the projection for EPSG:31985 if not already defined
-      if (!proj4.defs("EPSG:31985")) {
-        proj4.defs("EPSG:31985", "+proj=utm +zone=25 +south +ellps=GRS80 +units=m +no_defs");
-      }
-      // Convert from EPSG:31985 to EPSG:4326 (WGS84 Latitude/Longitude)
-      return proj4("EPSG:31985", "EPSG:4326", [x, y]);
-    }
-
-    /**
-     * Displays the details of a selected intersection and updates the map.
-     * @param {Object} d - The data object of the selected intersection.
-     * @param {HTMLElement} trClicada - The table row element that was clicked.
-     */
-    function mostrarDetalhes(d, trClicada) {
-      // Remove 'selecionado' class from all rows and add to the clicked row
-      document.querySelectorAll("#tabela tbody tr").forEach(tr => tr.classList.remove("selecionado"));
-      trClicada.classList.add("selecionado");
-
-      // Update details panel
-      document.getElementById("det-id").textContent = d.fid || "---";
-      document.getElementById("det-bairro").textContent = d.NOME || "---";
-      document.getElementById("det-rua1").textContent = d.rua1 || "---";
-      document.getElementById("det-rua2").textContent = d.rua2 || "---";
-      document.getElementById("det-status").textContent = (d.status === true || d.status === "TRUE") ? "Validado" : "Não Validado";
-      document.getElementById("det-coord").textContent = d.geometry || "---";
-
-      // Update map if geometry data is available
-      if (d.geometry) {
-        try {
-          // Parse WKT (Well-Known Text) geometry
-          const geojson = window.wellknown.parse(d.geometry);
-          if (!geojson || geojson.type !== "Point") {
-            throw new Error("Formato de geometria inválido ou não é um Ponto.");
-          }
-          const [x, y] = geojson.coordinates; // Get UTM coordinates
-          const [lon, lat] = utmToLatLng(x, y); // Convert to LatLng
-          const latlng = [lat, lon];
-
-          // Remove existing marker and add a new one
-          if (marker) marker.remove();
-          marker = L.marker(latlng).addTo(map);
-          map.setView(latlng, 18); // Set map view to the new coordinates with zoom
-        } catch (err) {
-          console.error("Erro ao interpretar WKT ou converter coordenadas:", err);
-          // Optionally, display a user-friendly message about the error
-        }
-      }
-    }
-
-    /**
-     * Applies filters based on selected neighborhood and status, then updates the table.
+     * Filtra os dados com base nos seletores e atualiza a tabela.
      */
     function aplicarFiltros() {
-      const bairro = document.getElementById("filtro-bairro").value;
-      const status = document.getElementById("filtro-status").value;
-
-      const filtrados = dados.filter(d => {
-        const validado = d.status === true || d.status === "TRUE";
-        const condBairro = bairro ? d.NOME === bairro : true;
-        const condStatus = status === "validado" ? validado : status === "nao-validado" ? !validado : true;
-        return condBairro && condStatus;
-      });
-      preencherTabela(filtrados);
+        const bairro = filtroBairro.value;
+        const statusFiltro = filtroStatus.value;
+        
+        dadosFiltrados = todosOsDados.filter(item => {
+            const condBairro = !bairro || item.NOME === bairro;
+            const condStatus = !statusFiltro || getStatus(item) === statusFiltro;
+            return condBairro && condStatus;
+        });
+        
+        preencherTabela();
     }
 
     /**
-     * Toggles the visibility of the usage guide.
+     * Renderiza a tabela com os dados filtrados.
      */
-    function toggleGuia() {
-      const guia = document.getElementById("guia-uso");
-      guia.style.display = guia.style.display === "none" ? "block" : "none";
+    function preencherTabela() {
+        tabelaBody.innerHTML = "";
+        if (dadosFiltrados.length === 0) {
+            tabelaBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">Nenhum item corresponde aos filtros.</td></tr>';
+        } else {
+            dadosFiltrados.forEach(item => {
+                const status = getStatus(item);
+                const tr = document.createElement("tr");
+                tr.dataset.id = item._docId;
+                tr.innerHTML = `
+                    <td><input type="checkbox" data-id="${item._docId}" onchange="toggleSelecao(this, event)"></td>
+                    <td>${item.fid || 'N/A'}</td>
+                    <td>${item.NOME || 'N/A'}</td>
+                    <td>${item.rua1 || 'N/A'}</td>
+                    <td>${item.rua2 || 'N/A'}</td>
+                    <td>${criarBadgeStatus(status)}</td>
+                `;
+                tr.addEventListener("click", (e) => mostrarDetalhes(item, tr));
+                tabelaBody.appendChild(tr);
+            });
+        }
+        contadorItens.textContent = `Total: ${dadosFiltrados.length} cruzamentos encontrados`;
+        document.getElementById('selecionar-todos').checked = false;
+        selecionados.clear();
     }
 
-    // Add event listeners for filter changes
-    document.getElementById("filtro-bairro").addEventListener("change", aplicarFiltros);
-    document.getElementById("filtro-status").addEventListener("change", aplicarFiltros);
+    /**
+     * Cria o HTML para o badge de status.
+     * @param {string} status - O status do item.
+     * @returns {string} HTML do badge.
+     */
+    function criarBadgeStatus(status) {
+        const textos = {
+            'validado': 'Validado',
+            'fabricado': 'Fabricado',
+            'nao-validado': 'Não Validado'
+        };
+        const texto = textos[status] || 'Indefinido';
+        const classe = textos[status] ? status : 'default';
+        return `<span class="status-badge ${classe}"><span class="dot"></span>${texto}</span>`;
+    }
 
-    // Initial data load when the page loads
-    carregarDados();
-  </script>
+    /**
+     * Exibe os detalhes de um item selecionado no painel lateral.
+     * @param {object} item - O objeto de dados do item.
+     * @param {HTMLElement} tr - A linha da tabela clicada.
+     */
+    function mostrarDetalhes(item, tr) {
+        // Alterna a classe da linha selecionada
+        if (linhaSelecionada) {
+            linhaSelecionada.classList.remove('selecionado');
+        }
+        tr.classList.add('selecionado');
+        linhaSelecionada = tr;
+
+        // Mostra o conteúdo e esconde o placeholder
+        detailsPlaceholder.style.display = 'none';
+        detailsContent.style.display = 'block';
+
+        // Preenche os detalhes
+        document.getElementById("det-id").textContent = item.fid || "---";
+        document.getElementById("det-bairro").textContent = item.NOME || "---";
+        document.getElementById("det-rua1").textContent = item.rua1 || "---";
+        document.getElementById("det-rua2").textContent = item.rua2 || "---";
+        document.getElementById("det-status-container").innerHTML = criarBadgeStatus(getStatus(item));
+        document.getElementById("det-coord").textContent = item.geometry || "---";
+        
+        atualizarMapa(item.geometry);
+    }
+
+    /**
+     * Atualiza o mapa com a nova coordenada.
+     * @param {string} wktString - A geometria em formato WKT.
+     */
+    function atualizarMapa(wktString) {
+        if (!wktString) {
+            mapa.setView([-7.11, -35.09], 12); // Posição padrão se não houver geometria
+            if(marcador) marcador.remove();
+            return;
+        }
+        try {
+            const geojson = window.wellknown.parse(wktString);
+            if (!geojson || geojson.type !== "Point") throw new Error("Geometria inválida ou não é um ponto.");
+            
+            const [x, y] = geojson.coordinates;
+            proj4.defs("EPSG:31985", "+proj=utm +zone=25 +south +ellps=GRS80 +units=m +no_defs");
+            const [lon, lat] = proj4("EPSG:31985", "EPSG:4326", [x, y]);
+
+            if (isNaN(lat) || isNaN(lon)) throw new Error("Coordenadas inválidas após projeção.");
+
+            mapa.setView([lat, lon], 18);
+            if (marcador) {
+                marcador.setLatLng([lat, lon]);
+            } else {
+                marcador = L.marker([lat, lon]).addTo(mapa);
+            }
+        } catch (e) {
+            console.error("Erro ao processar geometria:", e);
+            if(marcador) marcador.remove();
+        }
+    }
+
+    /**
+     * Adiciona ou remove um ID do conjunto de itens selecionados.
+     * @param {HTMLInputElement} checkbox - O checkbox que foi alterado.
+     * @param {Event} event - O evento do clique.
+     */
+    function toggleSelecao(checkbox, event) {
+        event.stopPropagation(); // Impede que o clique no checkbox dispare o clique na linha
+        const id = checkbox.dataset.id;
+        if (checkbox.checked) {
+            selecionados.add(id);
+        } else {
+            selecionados.delete(id);
+        }
+    }
+    
+    /**
+     * Seleciona ou deseleciona todos os checkboxes visíveis.
+     * @param {HTMLInputElement} masterCheckbox - O checkbox "selecionar todos".
+     */
+    function toggleSelecionarTodos(masterCheckbox) {
+        const isChecked = masterCheckbox.checked;
+        const checkboxes = tabelaBody.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            cb.checked = isChecked;
+            const id = cb.dataset.id;
+            if(isChecked) {
+                selecionados.add(id);
+            } else {
+                selecionados.delete(id);
+            }
+        });
+    }
+
+    /**
+     * Altera o status dos itens selecionados no Firestore.
+     * @param {string} novoStatus - O novo status a ser aplicado.
+     */
+    async function alterarSelecionadosPara(novoStatus) {
+        if (selecionados.size === 0) {
+            alert("Nenhum item selecionado.");
+            return;
+        }
+        const batch = db.batch();
+        const promises = [];
+
+        selecionados.forEach(id => {
+            const docRef = colecaoRef.doc(id);
+            promises.push(docRef.get());
+        });
+
+        const docs = await Promise.all(promises);
+
+        docs.forEach(doc => {
+            if (doc.exists) {
+                const dadosAtuais = doc.data();
+                batch.update(doc.ref, {
+                    status_anterior: dadosAtuais.status || null,
+                    status: novoStatus
+                });
+            }
+        });
+
+        try {
+            await batch.commit();
+            console.log(`${selecionados.size} itens atualizados para ${novoStatus}`);
+            await carregarDados(); // Recarrega para refletir as mudanças
+            selecionados.clear();
+        } catch (error) {
+            console.error("Erro ao atualizar em lote:", error);
+        }
+    }
+
+    /**
+     * Reverte o status dos itens selecionados para o status anterior.
+     */
+    async function reverterStatusSelecionados() {
+        if (selecionados.size === 0) {
+            alert("Nenhum item selecionado.");
+            return;
+        }
+        const batch = db.batch();
+        const promises = [];
+
+        selecionados.forEach(id => {
+            const docRef = colecaoRef.doc(id);
+            promises.push(docRef.get());
+        });
+
+        const docs = await Promise.all(promises);
+
+        docs.forEach(doc => {
+            if (doc.exists) {
+                const dadosAtuais = doc.data();
+                if (dadosAtuais.hasOwnProperty('status_anterior')) {
+                    batch.update(doc.ref, {
+                        status: dadosAtuais.status_anterior,
+                        status_anterior: firebase.firestore.FieldValue.delete()
+                    });
+                }
+            }
+        });
+        
+        try {
+            await batch.commit();
+            console.log(`${selecionados.size} itens tiveram seu status revertido.`);
+            await carregarDados();
+            selecionados.clear();
+        } catch (error) {
+            console.error("Erro ao reverter status:", error);
+        }
+    }
+
+
+    // --- INICIALIZAÇÃO DA PÁGINA ---
+    document.addEventListener("DOMContentLoaded", () => {
+        mapa = L.map('map').setView([-7.115, -35.09], 12); // Posição inicial mais genérica
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(mapa);
+        
+        filtroBairro.addEventListener("change", aplicarFiltros);
+        filtroStatus.addEventListener("change", aplicarFiltros);
+        
+        carregarDados();
+    });
+
+</script>
 </body>
 </html>
